@@ -1,11 +1,14 @@
 name = "MIDI"
 uuid = "f57c4921-e30c-5f49-b073-3f2f2ada663e"
 repo = "https://github.com/JuliaMusic/MIDI.jl.git"
-version = "1.6.0"
+version = "2.0.3"
+
+[deps]
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 
 [compat]
+FileIO = "1"
 julia = "1"
-
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

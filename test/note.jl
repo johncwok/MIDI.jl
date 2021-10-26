@@ -1,7 +1,7 @@
 cd(@__DIR__)
 
 @testset "Notes" begin
-    midi = readMIDIFile("doxy.mid")
+    midi = load("doxy.mid")
 
     notes = getnotes(midi.tracks[4])
 
@@ -21,13 +21,20 @@ end
     @test pitch_to_name(name_to_pitch("B#")) == "C5"
     @test pitch_to_name(name_to_pitch("F♯")) == "F♯4"
     @test name_to_pitch("C4") == 60
+    @test pitch_to_name(name_to_pitch("C")) == "C4"
+    @test pitch_to_name(name_to_pitch("Cb")) == "B3"
+    @test pitch_to_name(name_to_pitch("G♭")) == "F♯4"
+    @test pitch_to_name(name_to_pitch("G♭"); flat=true) == "G♭4"
+    @test pitch_to_name(name_to_pitch("Bb7")) == "A♯7"
 
     n = Note(0, 1, 1, 1)
     @test pitch_to_name(n.pitch) == "C-1"
+
+    @test all([name_to_pitch(pitch_to_name(i)) == i for i in 0:255])
 end
 
 @testset "copying notes" begin
-    midi = readMIDIFile("doxy.mid")
+    midi = load("doxy.mid")
     notes = getnotes(midi.tracks[4])
     n2 = copy(notes)
     notes[1].pitch = 1

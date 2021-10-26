@@ -3,7 +3,7 @@ using MIDI
 cd(@__DIR__)
 
 @testset "MIDI IO" begin
-    midi = readMIDIFile("doxy.mid")
+    midi = load("doxy.mid")
     @test midi.tpq == 960
     @test length(midi.tracks) == 4
 
@@ -24,4 +24,13 @@ cd(@__DIR__)
     @test notes[2].duration == 450
     @test notes[2].channel == 0
 
+end
+
+@testset "Deprecated MIDI IO" begin
+    midi = load("doxy.mid")
+    @test_deprecated readMIDIFile("doxy.mid")
+    @test_deprecated writeMIDIFile("test.mid", midi)
+    @test_deprecated writeMIDIFile("test.midi", getnotes(midi))
+    rm("test.mid")
+    rm("test.midi")
 end

@@ -1,6 +1,3 @@
-export getnotes, addnote!, addnotes!, addevent!, addevents!
-export MIDITrack
-
 """
     MIDITrack <: Any
 
@@ -16,7 +13,7 @@ mutable struct MIDITrack
 end
 MIDITrack() = MIDITrack(TrackEvent[])
 # Pretty print
-function Base.show(io::IO, t::MIDITrack) where {N}
+function Base.show(io::IO, t::MIDITrack)
     L = length(t.events)
     M = count(x -> x isa MIDIEvent, t.events)
     T = count(x -> x isa MetaEvent, t.events)
@@ -71,7 +68,7 @@ function readtrack(f::IO)
 
     # Validate that the track ends with a track end event
     lastevent = track.events[length(track.events)]
-    if !isa(lastevent, MetaEvent) || lastevent.metatype != METATRACKEND
+    if !isa(lastevent, EndOfTrackEvent)
         error("Invalid track - does not end with track metaevent")
     else
         # strip the track end event - we don't need to worry about manipulating it
@@ -102,7 +99,7 @@ function writetrack(f::IO, track::MIDITrack)
     end
 
     # Write the track end event
-    writeevent(event_buffer, MetaEvent(0, METATRACKEND, UInt8[]))
+    writeevent(event_buffer, EndOfTrackEvent(0))
 
     bytes = take!(event_buffer)
 
@@ -236,8 +233,8 @@ function addnotes!(track::MIDITrack, notes)
     posis = Vector{Int}()
     for anote in notes
         note = Note(anote)
-        for (status, position) in [(NOTEON, note.position), (NOTEOFF, note.position + note.duration)]
-            push!(events, MIDIEvent(0, status | note.channel, UInt8[note.pitch, note.velocity]))
+        for (event, position) in [(NoteOnEvent, note.position), (NoteOffEvent, note.position + note.duration)]
+            push!(events, event(0, Int(note.pitch), Int(note.velocity), channel = note.channel))
             push!(posis, position)
         end
     end
@@ -251,10 +248,10 @@ Add given `note` to given `track`, internally doing the translation from
 absolute time to relative time.
 """
 function addnote!(track::MIDITrack, anote::AbstractNote)
-    # Convert to `Note`
+    # Convert to `Note
     note = Note(anote)
-    for (status, position) in [(NOTEON, note.position), (NOTEOFF, note.position + note.duration)]
-        addevent!(track, position, MIDIEvent(0, status | note.channel, UInt8[note.pitch, note.velocity]))
+    for (event, position) in [(NoteOnEvent, note.position), (NoteOffEvent, note.position + note.duration)]
+        addevent!(track, position, event(0, Int(note.pitch), Int(note.velocity), channel = note.channel))
     end
 end
 
@@ -262,11 +259,11 @@ end
 """
     getnotes(midi::MIDIFile [, trackno])
 
-Find all NOTEON and NOTEOFF midi events in the `trackno` track of a `midi`
+Find all `NoteOnEvent`s and `NoteOffEvent`s in the `trackno` track of a `midi`
 (default 1 or 2),
 that correspond to the same note value (pitch) and convert them into
-the `Note` datatype. There are special cases where NOTEOFF is actually
-encoded as NOTEON with 0 velocity, but `getnotes` takes care of this.
+the `Note` datatype. There are special cases where NoteOffEvent is actually
+encoded as NoteOnEvent with 0 velocity, but `getnotes` takes care of this.
 
 Notice that the first track of a `midi` typically doesn't have any notes,
 which is why the function defaults to track 2.
@@ -284,14 +281,14 @@ function getnotes(track::MIDITrack, tpq = 960)
     for (i, event) in enumerate(track.events)
         tracktime += event.dT
         # Read through events until a noteon with velocity higher tha 0 is found
-        if isa(event, MIDIEvent) && event.status & 0xF0 == NOTEON && event.data[2] > 0
+        if event isa NoteOnEvent && event.velocity > 0
             duration = UInt(0)
             for event2 in track.events[i+1:length(track.events)]
                 duration += event2.dT
                 # If we have a MIDI event & it's a noteoff (or a note on with 0 velocity), and it's for the same note as the first event we found, make a note
                 # Many MIDI files will encode note offs as note ons with velocity zero
-                if isa(event2, MIDI.MIDIEvent) && (event2.status & 0xF0 == MIDI.NOTEOFF || (event2.status & 0xF0 == MIDI.NOTEON && event2.data[2] == 0)) && event.data[1] == event2.data[1]
-                    push!(notes, Note(event.data[1], event.data[2], tracktime, duration, event.status & 0x0F))
+                if (event2 isa NoteOffEvent || (event2 isa NoteOnEvent && event2.velocity == 0)) && event.note == event2.note
+                    push!(notes, Note(event.note, event.velocity, tracktime, duration, channelnumber(event)))
                     break
                 end
             end
@@ -309,11 +306,12 @@ Time is absolute, not relative to the last event.
 
 The `program` must be specified in the range 1-128, **not** in 0-127!
 """
-function programchange(track::MIDITrack, time::Integer, channel::UInt8, program::UInt8)
-    @warn "This function has not been tested. Please test it before using "*
-    "and be kind enough to report whether it worked!"
+function programchange(track::MIDITrack, time::Int, channel::Int, program::Int)
+    if !(1 <= program <= 128)
+        throw(ArgumentError("The `program` must be specified in the range 1-128"))
+    end
     program -= 1
-    addevent!(track, time, MIDIEvent(0, PROGRAMCHANGE | channel, UInt8[program]))
+    addevent!(track, time, ProgramChangeEvent(0, program, channel = channel))
 end
 
 

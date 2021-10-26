@@ -5,7 +5,7 @@ validtestvalues = [ # Raw data and the miditrack it should be read into
     # Perhaps longer than it needs to be, but covers meta events, MIDI events, and running statuses.
     (
         [0x4d, 0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x52, 0x60, 0x90, 0x3c, 0x7f, 0x30, 0x43, 0x7f, 0x30, 0x80, 0x3c, 0x7f, 0x00, 0x90, 0x40, 0x7f, 0x30, 0x80, 0x43, 0x7f, 0x30, 0xc0, 0x3f, 0x00, 0x80, 0x40, 0x7f, 0x00, 0x90, 0x3c, 0x7f, 0x30, 0x43, 0x7f, 0x30, 0x80, 0x3c, 0x7f, 0x00, 0x90, 0x40, 0x7f, 0x30, 0x80, 0x43, 0x7f, 0x30, 0xc0, 0x22, 0x00, 0x80, 0x40, 0x7f, 0x00, 0x90, 0x3c, 0x7f, 0x30, 0x43, 0x7f, 0x30, 0x80, 0x3c, 0x7f, 0x00, 0x90, 0x40, 0x7f, 0x30, 0x80, 0x43, 0x7f, 0x30, 0xc0, 0x52, 0x00, 0x80, 0x40, 0x7f, 0x00, 0xff, 0x2f, 0x00],
-        MIDI.MIDITrack(MIDI.TrackEvent[MIDI.MIDIEvent(96,0x90,UInt8[60,127]),MIDI.MIDIEvent(48,0x90,UInt8[67,127]),MIDI.MIDIEvent(48,0x80,UInt8[60,127]),MIDI.MIDIEvent(0,0x90,UInt8[64,127]),MIDI.MIDIEvent(48,0x80,UInt8[67,127]),MIDI.MIDIEvent(48,0xc0,UInt8[63]),MIDI.MIDIEvent(0,0x80,UInt8[64,127]),MIDI.MIDIEvent(0,0x90,UInt8[60,127]),MIDI.MIDIEvent(48,0x90,UInt8[67,127]),MIDI.MIDIEvent(48,0x80,UInt8[60,127]),MIDI.MIDIEvent(0,0x90,UInt8[64,127]),MIDI.MIDIEvent(48,0x80,UInt8[67,127]),MIDI.MIDIEvent(48,0xc0,UInt8[34]),MIDI.MIDIEvent(0,0x80,UInt8[64,127]),MIDI.MIDIEvent(0,0x90,UInt8[60,127]),MIDI.MIDIEvent(48,0x90,UInt8[67,127]),MIDI.MIDIEvent(48,0x80,UInt8[60,127]),MIDI.MIDIEvent(0,0x90,UInt8[64,127]),MIDI.MIDIEvent(48,0x80,UInt8[67,127]),MIDI.MIDIEvent(48,0xc0,UInt8[82]),MIDI.MIDIEvent(0,0x80,UInt8[64,127])])
+        MIDI.MIDITrack(MIDI.TrackEvent[MIDI.NoteOnEvent(96,0x90,UInt8[60,127]),MIDI.NoteOnEvent(48,0x90,UInt8[67,127]),MIDI.NoteOffEvent(48,0x80,UInt8[60,127]),MIDI.NoteOnEvent(0,0x90,UInt8[64,127]),MIDI.NoteOffEvent(48,0x80,UInt8[67,127]),MIDI.ProgramChangeEvent(48,0xc0,UInt8[63]),MIDI.NoteOffEvent(0,0x80,UInt8[64,127]),MIDI.NoteOffEvent(0,0x90,UInt8[60,127]),MIDI.NoteOffEvent(48,0x90,UInt8[67,127]),MIDI.NoteOffEvent(48,0x80,UInt8[60,127]),MIDI.NoteOffEvent(0,0x90,UInt8[64,127]),MIDI.NoteOffEvent(48,0x80,UInt8[67,127]),MIDI.ProgramChangeEvent(48,0xc0,UInt8[34]),MIDI.NoteOffEvent(0,0x80,UInt8[64,127]),MIDI.NoteOnEvent(0,0x90,UInt8[60,127]),MIDI.NoteOnEvent(48,0x90,UInt8[67,127]),MIDI.NoteOffEvent(48,0x80,UInt8[60,127]),MIDI.NoteOnEvent(0,0x90,UInt8[64,127]),MIDI.NoteOffEvent(48,0x80,UInt8[67,127]),MIDI.ProgramChangeEvent(48,0xc0,UInt8[82]),MIDI.NoteOffEvent(0,0x80,UInt8[64,127])])
     ),
 ]
 
@@ -41,33 +41,33 @@ invalidtestvalues = [
         end
     end
 
-    C = MIDI.Note(60, 96, 0, 5)
-    G = MIDI.Note(67, 96, 48, 5)
-    E = MIDI.Note(64, 96, 96, 5)
+    C = MIDI.Note(60, 127, 0, 96)
+    G = MIDI.Note(67, 127, 48, 96)
+    E = MIDI.Note(64, 127, 96, 96)
     # Test writing notes and program change events to a track
     inc = 96
     track = MIDI.MIDITrack()
     notes = MIDI.Note[]
-    for v in UInt8[1,2,3]
+    for v in [1,2,3]
         push!(notes, C)
         push!(notes, E)
         push!(notes, G)
-        MIDI.programchange(track, E.position + inc + inc, UInt8(0), v)
+        MIDI.programchange(track, Int(E.position + inc + inc), 0, v)
         C.position += inc
         E.position += inc
         G.position += inc
-        C = MIDI.Note(60, 96, C.position+inc, 0)
-        E = MIDI.Note(64, 96, E.position+inc, 0)
-        G = MIDI.Note(67, 96, G.position+inc, 0)
+        C = MIDI.Note(60, 127, C.position+inc, 96)
+        E = MIDI.Note(64, 127, E.position+inc, 96)
+        G = MIDI.Note(67, 127, G.position+inc, 96)
     end
 
     MIDI.addnotes!(track, notes)
-
-    # @testset "Allow notes and program change events" begin
-    #     buf = IOBuffer()
-    #     MIDI.writetrack(buf, track)
-    #     @test take!(buf) == [0x4d, 0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x52, 0x60, 0x90, 0x3c, 0x7f, 0x30, 0x43, 0x7f, 0x30, 0x80, 0x3c, 0x7f, 0x00, 0x90, 0x40, 0x7f, 0x30, 0x80, 0x43, 0x7f, 0x30, 0xc0, 0x00, 0x00, 0x80, 0x40, 0x7f, 0x00, 0x90, 0x3c, 0x7f, 0x30, 0x43, 0x7f, 0x30, 0x80, 0x3c, 0x7f, 0x00, 0x90, 0x40, 0x7f, 0x30, 0x80, 0x43, 0x7f, 0x30, 0xc0, 0x01, 0x00, 0x80, 0x40, 0x7f, 0x00, 0x90, 0x3c, 0x7f, 0x30, 0x43, 0x7f, 0x30, 0x80, 0x3c, 0x7f, 0x00, 0x90, 0x40, 0x7f, 0x30, 0x80, 0x43, 0x7f, 0x30, 0xc0, 0x02, 0x00, 0x80, 0x40, 0x7f, 0x00, 0xff, 0x2f, 0x00]
-    # end
+    @testset "Allow notes and program change events" begin
+        buf = IOBuffer()
+        MIDI.writetrack(buf, track)
+        buf = take!(buf)
+        @test buf == [0x4d, 0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x52, 0x60, 0x90, 0x3c, 0x7f, 0x30, 0x43, 0x7f, 0x30, 0x80, 0x3c, 0x7f, 0x00, 0x90, 0x40, 0x7f, 0x30, 0x80, 0x43, 0x7f, 0x30, 0xc0, 0x00, 0x00, 0x80, 0x40, 0x7f, 0x00, 0x90, 0x3c, 0x7f, 0x30, 0x43, 0x7f, 0x30, 0x80, 0x3c, 0x7f, 0x00, 0x90, 0x40, 0x7f, 0x30, 0x80, 0x43, 0x7f, 0x30, 0xc0, 0x01, 0x00, 0x80, 0x40, 0x7f, 0x00, 0x90, 0x3c, 0x7f, 0x30, 0x43, 0x7f, 0x30, 0x80, 0x3c, 0x7f, 0x00, 0x90, 0x40, 0x7f, 0x30, 0x80, 0x43, 0x7f, 0x30, 0xc0, 0x02, 0x00, 0x80, 0x40, 0x7f, 0x00, 0xff, 0x2f, 0x00]
+     end
 
     @testset "Correctly get notes from a track" begin
         sort!(notes, lt=((x, y)->x.position<y.position))
@@ -79,7 +79,7 @@ invalidtestvalues = [
     @testset "Track names" begin
 
         # correct tracks
-        midi = readMIDIFile("doxy.mid")
+        midi = load("doxy.mid")
         @test trackname(midi.tracks[2]) == "Drums"
         @test trackname(midi.tracks[3]) == "Bass"
         @test trackname(midi.tracks[4]) == "ORIGINAL"
@@ -97,8 +97,8 @@ invalidtestvalues = [
         @test trackname(midi.tracks[2]) == "Overwrite"
 
         # save and reopen
-        writeMIDIFile("changedname.mid",midi)
-        midi = readMIDIFile("changedname.mid")
+        save("changedname.mid",midi)
+        midi = load("changedname.mid")
         @test trackname(midi.tracks[2]) == "Overwrite"
         rm("changedname.mid")
 
@@ -120,7 +120,7 @@ invalidtestvalues = [
         # add events to the track, encode the order in which the events are
         # added in the status.
         for (i,pos) in enumerate(positions)
-            addevent!(track, pos, MIDIEvent(0, UInt8(i) , UInt8[0x00 , 0x00]))
+            addevent!(track, pos, MIDI.NoteOnEvent(0, UInt8(i), 0, 0))
         end
 
         # obain positions and adding order from track
@@ -145,7 +145,7 @@ invalidtestvalues = [
     # add some random events using addevent  status = 0 to distinguish from
     # the ones added with the function to be tested
     for i = 1:50
-        addevent!(track, round(Int, 100 * rand()), MIDIEvent(0, 0 , UInt8[0x00 , 0x00]))
+        addevent!(track, round(Int, 100 * rand()), MIDI.NoteOnEvent(0, 0x00, 0, 0))
     end
 
     # generate random but ascending positions
@@ -156,7 +156,7 @@ invalidtestvalues = [
     eventindex = 0
     eventtime = 0
     for (i,pos) in enumerate(posis)
-        eventindex, eventtime = MIDI.addevent_hint!(track, pos, MIDIEvent(0, UInt8(i) , UInt8[0x00 , 0x00]), eventindex, eventtime)
+        eventindex, eventtime = MIDI.addevent_hint!(track, pos, MIDI.NoteOffEvent(0, UInt8(i), 0, 0), eventindex, eventtime)
     end
 
     # obtain order and positions of the events added with addevent_hint
@@ -179,7 +179,7 @@ invalidtestvalues = [
 
     @testset "addnotes!" begin
 
-        midi = readMIDIFile("doxy.mid")
+        midi = load("doxy.mid")
         original_track = deepcopy(midi.tracks[2])
         test_track = deepcopy(midi.tracks[2])
 
@@ -187,7 +187,7 @@ invalidtestvalues = [
         notes = getnotes(test_track)
         deletes = Vector{Int}()
         for (i,event) in enumerate(test_track.events)
-            if isa(event, MIDIEvent) && (event.status & 0xF0) in [NOTEON, NOTEOFF]
+            if event isa MIDI.NoteOnEvent || event isa MIDI.NoteOffEvent
                 push!(deletes, i)
             end
         end

@@ -1,5 +1,6 @@
 using MIDI
 using Test
+using FileIO
 
 include("variablelength.jl")
 include("sysexevent.jl")
@@ -9,3 +10,4 @@ include("metaevent.jl")
 include("miditrack.jl")
 include("midiio.jl")
 include("negative_delta.jl")
+include("utils.jl")

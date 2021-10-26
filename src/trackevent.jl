@@ -1,5 +1,3 @@
-export TrackEvent, MetaEvent, MIDIEvent, SysexEvent
-
 """
     TrackEvent <: Any
 Abstract supertype for all MIDI events.
@@ -26,11 +24,7 @@ abstract type TrackEvent end
     MetaEvent <: TrackEvent
 See [`TrackEvent`](@ref).
 """
-mutable struct MetaEvent <: TrackEvent
-    dT::Int
-    metatype::UInt8
-    data::Array{UInt8,1}
-end
+abstract type MetaEvent <: TrackEvent end
 
 @inline ismetaevent(b::UInt8) = b == 0xFF
 
@@ -38,10 +32,10 @@ function readmetaevent(dT::Int, f::IO)
     # Meta events are 0xFF - type (1 byte) - variable length data length - data bytes
     skip(f, 1) # Skip the 0xff that starts the event
     metatype = read(f, UInt8)
+    type = MIDI_EVENTS_SPEC[metatype]
     datalength = readvariablelength(f)
     data = read!(f, Array{UInt8}(undef, datalength))
-
-    MetaEvent(dT, metatype, data)
+    type(dT, metatype, data)
 end
 
 function writeevent(f::IO, event::MetaEvent)
@@ -50,9 +44,11 @@ function writeevent(f::IO, event::MetaEvent)
     end
     writevariablelength(f, event.dT)
     write(f, META)
+    # Write metatype byte
     write(f, event.metatype)
-    writevariablelength(f, convert(Int, length(event.data)))
-    write(f, event.data)
+    data = encode(event)
+    writevariablelength(f, convert(Int, length(data)))
+    write(f, data)
 end
 
 
@@ -63,11 +59,7 @@ end
     MIDIEvent <: TrackEvent
 See [`TrackEvent`](@ref).
 """
-mutable struct MIDIEvent <: TrackEvent
-    dT::Int
-    status::UInt8
-    data::Array{UInt8,1}
-end
+abstract type MIDIEvent <: TrackEvent end
 
 function isstatusbyte(b::UInt8)
     (b & 0b10000000) == 0b10000000
@@ -101,7 +93,8 @@ function readMIDIevent(dT::Int, f::IO, laststatus::UInt8)
 
     data = read!(f, Array{UInt8}(undef, toread))
 
-    MIDIEvent(dT, statusbyte, data)
+    type = MIDI_EVENTS_SPEC[statusbyte & 0xF0]
+    type(dT, statusbyte, data)
 end
 
 function writeevent(f::IO, event::MIDIEvent, writestatus::Bool)
@@ -114,7 +107,7 @@ function writeevent(f::IO, event::MIDIEvent, writestatus::Bool)
         write(f, event.status)
     end
 
-    write(f, event.data)
+    write(f, encode(event))
 end
 
 function writeevent(f::IO, event::MIDIEvent)

@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+
+# v2.0.0
+## Breaking
+* `MIDIEvent` and `MetaEvent` are abstract types and they cannot be used directly.
+
+## Additions
+* New event types for each midi and meta events.
+
+* The list of new meta event types:
+    * SequenceNumberEvent
+    * TextEvent
+    * CopyrightNoticeEvent
+    * TrackNameEvent
+    * InstrumentNameEvent
+    * LyricEvent
+    * MarkerEvent
+    * CuePointEvent
+    * MIDIChannelPrefixEvent
+    * EndOfTrackEvent
+    * SetTempoEvent
+    * TimeSignatureEvent
+    * KeySignatureEvent
+
+* The list of new midi event types:
+    * NoteOffEvent
+    * NoteOnEvent
+    * AftertouchEvent
+    * ControlChangeEvent
+    * ProgramChangeEvent
+    * ChannelPressureEvent
+    * PitchBendEvent
+
+# v1.12.0
+* New function `tempochanges `
+# v1.11.0
+* Added `qpm` that returns the quarter notes per minute tempo of a given MIDI
+* Added `bpm` that returns the beats per minute of a given MIDI
+* Deprecated `BPM`
+# v1.10.0
+* Added `time_signature` that returns the time signature of a given MIDI.
+# v1.9.0
+* `name_to_pitch` now accepts flat names and `pitch_to_name` accepts `flat` keyword argument.
+# v1.8.0
+* `DrumNote` shorthand constructor, keyword constructor for `Note` and added `DRUMKEY` dictionary in constants.jl (originally in MusicVisualizations).
+# v1.7.0
+* Notes constructor allows values of `tpq` greater than `960`.
 # v1.6.0
 * New function `testnotes()` that returns a test set of human-played notes.
 # v1.5.2

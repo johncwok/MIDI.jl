@@ -1,36 +1,23 @@
 # Functions that find special events, like e.g. lyrics, or tracknames
 # are contained here
 
-export trackname, addtrackname!, textevent, findtextevents
-export tracknames
-
 const NOTRACKNAME = "No track name found"
 
 """
     trackname(track::MIDI.MIDITrack)
 
 Return the name of the given `track` as a string,
-by finding the "track name" `MetaEvent`.
+by finding the `TrackNameEvent`.
 
 If no such event exists, `"No track name found"` is returned.
 """
 function trackname(track::MIDI.MIDITrack)
-
-    pos = findtrackname(track)
-    if pos == 0
-        return NOTRACKNAME
-    # check if there really is a name
-    elseif length(track.events[pos].data) == 0
-        return NOTRACKNAME
-    else
-        event = track.events[pos]
-        # extract the name (string(Char()) takes care of ASCII encoding)
-        trackname = string(Char(event.data[1]))
-        for c in event.data[2:end]
-            trackname *= string(Char(c))
+    for event in track.events
+        if event isa TrackNameEvent
+            return event.text
         end
-        return trackname
     end
+    return NOTRACKNAME
 end
 
 "`tracknames(m::MIDIFile) = trackname.(m.tracks)`"
@@ -40,64 +27,28 @@ tracknames(m::MIDIFile) = trackname.(m.tracks)
     addtrackname!(track::MIDI.MIDITrack, name::String)
 
 Add a name to the given `track` by attaching the
-"track name" `MetaEvent` to the start of the `track`.
+`TrackNameEvent` to the start of the `track`.
 """
 function addtrackname!(track::MIDI.MIDITrack, name::String)
-    # construct fitting name event
-    data = UInt8[]
-    for i = 1:length(name)
-        push!(data, UInt8(name[i]))
-    end
-    meta = MetaEvent(0,0x03,data)
+    trackname = TrackNameEvent(0, name)
 
-    # remove existing name
-    prev = findtrackname(track)
-    if prev != 0
-        deleteat!(track.events, prev)
-    end
-
-    addevent!(track, 0, meta)
-end
-
-function findtrackname(track::MIDI.MIDITrack)
-    position = 0
-    for (i,event) in enumerate(track.events)
-        if isa(event, MIDI.MetaEvent) && event.metatype == 0x03
-            position = i
+    # Remove existing name
+    for (i, event) in enumerate(track.events)
+        if event isa TrackNameEvent
+            deleteat!(track.events, i)
             break
         end
     end
-    return position
+
+    addevent!(track, 0, trackname)
 end
 
-
-
-"""
-    textevent(eventtype, text)
-Create an event using the string `text`.
-The `eventtype` can be `:text, :lyric, :marker`, which will create the
-appropriate type of `MetaEvent`.
-
-The returned event can be added to a [`MIDITrack`](@ref) via either
-[`addevent!`](@ref) or [`addevents!`](@ref) for multiple events.
-
-*Notice* - Cubase can read the marker events and MuseScore can read the lyrics
-events. We haven't seen any editor that can read the text events, so far.
-"""
-function textevent(eventtype, text)
-    data = [UInt8(a) for a in text]
-    event = MetaEvent(0, s_to_text[eventtype], data)
-end
-
-const s_to_text = Dict(
-:text => TEXTEV, :lyric => LYRICEV, :marker => MARKEREV
-)
 
 """
     findtextevents(eventtype, track)
-Find all "text" events specifield by `eventtype` in the `track`.
-The `eventtype` can be `:text, :lyric, :marker`, which will find the
-appropriate `MetaEvent`s.
+Find all text events specifield by `eventtype` in the `track`.
+The `eventtype` can be `TextEvent, LyricEvent, MarkerEvent, which will find the
+appropriate meta events.
 
 For convenience, this function does not return the events themselves.
 Instead, it returns three vectors: the first is the strings of the events,
@@ -106,13 +57,15 @@ the absolute position of the events (since start of `track`).
 
 *Notice* - common music score editors like e.g. MuseScore, GuitarPro, etc., do
 not export the lyrics and text information when exporting midi files.
+
+*Notice* - Cubase can read the marker events and MuseScore can read the lyrics
+events. We haven't seen any editor that can read the text events, so far.
 """
 function findtextevents(eventtype, track)
-    etype = s_to_text[eventtype]
     events = String[]
     idxs = Int[]
     for (i, event) ∈ enumerate(track.events)
-        if typeof(event) == MetaEvent && event.metatype == etype
+        if event isa eventtype
             # lol without copy the events are lost!
             push!(events, String(copy(event.data)))
             push!(idxs, i)

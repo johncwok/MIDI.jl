@@ -1,13 +1,18 @@
-export Note, Notes, AbstractNote
-export pitch_to_name, name_to_pitch
-
 abstract type AbstractNote end
 
 """
-    Note <: AbstractNote
-Mutable data structure describing a "music note". A bundle of many notes results
+    Note(pitch, velocity, position, duration, channel = 0) <: AbstractNote
+Mutable data structure describing a music note. A bundle of many notes results
 in the [`Notes`](@ref) struct, which is the output of the [`getnotes`](@ref)
 function.
+
+If the `channel` of the note is `0` (default), it is not shown.
+
+You can also create a `Note` with the following keyword constructor:
+```julia
+Note(pitch, position; velocity = 100, duration = 960, channel = 0)
+```
+
 ## Fields:
 * `pitch::UInt8` : Pitch, starting from C-1 = 0, adding one per semitone.
   Use the functions [`name_to_pitch`](@ref) and
@@ -17,8 +22,6 @@ function.
 * `duration::UInt` : Duration in ticks.
 * `channel::UInt8 = 0` : Channel of the track that the note is played on.
   Cannot be higher than 127 (0x7F).
-
-If the `channel` of the note is `0` (default) it is not printed with `show`.
 """
 mutable struct Note <: AbstractNote
     pitch::UInt8
@@ -36,11 +39,25 @@ mutable struct Note <: AbstractNote
             new(pitch, velocity, position, duration, channel)
         end
 end
+Note(pitch, position; velocity = 100, duration = 960, channel = 0) =
+Note(pitch, velocity, position, duration, channel)
+
 @inline Note(n::Note) = n
 
-import Base.+, Base.-, Base.==
+"""
+    DrumNote(pitch, position, duration = 960; velocity = 100)
+Shorthand constructor for a [`Note`](@ref) that is always on channel `9`.
+It is possible to specify pitch as a `String` (e.g. "Acoustic Snare"), which
+will be converted to actual pitch using [`DRUMKEY`](@ref).
+"""
+DrumNote(pitch, position, duration = 960; velocity = 100, gmmap = DRUMKEY) =
+Note(_drumpitch(pitch, gmmap), velocity, position, duration, 9)
 
-==(n1::Note, n2::Note) =
+_drumpitch(pitch::Real, gmmap) = pitch
+_drumpitch(pitch::String, gmmap) = name_to_pitch(gmmap[pitch])
+
+import Base.==
+==(n1::AbstractNote, n2::AbstractNote) =
     n1.pitch == n2.pitch &&
     n1.duration == n2.duration &&
     n1.position == n2.position &&
@@ -51,16 +68,11 @@ Base.copy(n::N) where {N<:AbstractNote} =
 N(n.pitch, n.velocity, n.position, n.duration, n.channel)
 
 """
-    Notes{N<:AbstractNote}
-Data structure describing a collection of "music notes", bundled with a ticks
-per quarter note measure.
-## Fields:
-* `notes::Vector{N} where {N <: Notes}`
-* `tpq::Int16` : Ticks per quarter note. Defines the fundamental unit of measurement
-   of a note's position and duration, as well as the length of one quarter note.
-   Takes values from 1 to 960.
+    Notes(note_vector, tpq = 960) -> Notes
+A data structure describing a collection of music notes, bundled with the ticks
+per quarter note (so that the notes can be attributed rhythmic value).
 
-`Notes` is iterated and accessed as if iterating or accessing its field `notes`.
+`Notes` can be iterated and accessed as the given `note_vector`.
 """
 struct Notes{N <: AbstractNote}
     notes::Vector{N}
@@ -69,17 +81,17 @@ end
 
 # Constructors for Notes:
 function Notes(notes::Vector{N}, tpq::Int = 960) where {N <: AbstractNote}
-    if tpq < 1 || tpq > 960
-        throw(ArgumentError("Ticks per quarter note (tpq) must ∈ [1, 960]"))
+    if tpq < 1
+        throw(ArgumentError("Ticks per quarter note (tpq) must be >= 1"))
     end
     Notes{N}(notes, tpq)
 end
 
-Notes() = Notes{Note}(Vector{Note}[], 960)
+Notes(; tpq = 960) = Notes{Note}(Vector{Note}[], tpq)
 
 # Iterator Interface for notes:
-Base.iterate(n::Notes) = iterate(n.notes)
-Base.iterate(n::Notes, i) = iterate(n.notes, i)
+Base.iterate(n::Notes, i = 1) = iterate(n.notes, i)
+# Base.iterate(n::Notes, i) = iterate(n.notes, i)
 Base.eltype(::Type{Notes{N}}) where {N} = N
 
 # Indexing
@@ -104,34 +116,40 @@ Base.copy(notes::Notes) = Notes([copy(n) for n in notes], notes.tpq)
 #######################################################
 # string name <-> midi pitch
 #######################################################
-using Base.Meta, Base.Unicode
 const PITCH_TO_NAME = Dict(
 0=>"C", 1=>"C♯", 2=>"D", 3=>"D♯", 4=>"E", 5=>"F", 6=>"F♯", 7=>"G", 8=>"G♯", 9=>"A",
 10 =>"A♯", 11=>"B")
 const NAME_TO_PITCH = Dict(
-v => k for (v, k) in zip(values(PITCH_TO_NAME), keys(PITCH_TO_NAME)))
-
+(v => k for (v, k) in zip(values(PITCH_TO_NAME), keys(PITCH_TO_NAME)))...,
+"D♭"=>1, "E♭"=>3, "G♭"=>6, "A♭"=>8, "B♭"=>10)
+const SHARP_TO_FLAT = Dict(
+"C♯"=>"D♭", "D♯"=>"E♭", "F♯"=>"G♭", "G♯"=>"A♭", "A♯"=>"B♭"
+)
 """
-    pitch_to_name(pitch) -> string
+    pitch_to_name(pitch; flat=false) -> String
 Return the name of the pitch, e.g. `F5`, `A♯3` etc. in modern notation given the
-pitch value in integer.
+pitch value in integer. When `flat=true`, accidentals are printed as flats, 
+e.g. `A♯3` is printed as `B♭3`.
 
 Reminder: middle C has pitch `60` and is displayed as `C4`.
 """
-function pitch_to_name(j)
-    i = Int(j)
+function pitch_to_name(pitch; flat::Bool=false)
+    i = Int(pitch)
     notename = PITCH_TO_NAME[mod(i, 12)]
+    if flat
+        notename = get(SHARP_TO_FLAT, notename, notename)
+    end
     octave = (i÷12)-1
     return notename*string(octave)
 end
 
 """
-    name_to_pitch(p::String) -> Int
-Return the pitch value of the given note name `p`, which can be of the form
+    name_to_pitch(name::String) -> Int
+Return the pitch value of the given note name, which can be of the form
 `capital_letter*sharp*octave` where:
 
 * `capital_letter` : from `"A"` to `"G"`.
-* `sharp` : one of `"#"` `"♯"` or `""`.
+* `sharp` : one of `"#"` `"♯"` `"b"` `"♭"` or `""`. 
 * `octave` : any integer (as a string), the octave number (an octave is 12 pitches).
   If not given it is assumed `"5"`.
 
@@ -141,19 +159,25 @@ We define E.g. `name_to_pitch("C4") === 60` (i.e. string
 See http://newt.phys.unsw.edu.au/jw/notes.html
 and https://en.wikipedia.org/wiki/C_(musical_note) .
 """
-function name_to_pitch(p)
-    pe = collect(Unicode.graphemes(p))
+function name_to_pitch(name)
+    pe = collect(Unicode.graphemes(name))
     pitch = NAME_TO_PITCH[pe[1]]
     x = 0
-    if pe[2] == "#" || pe[2] == "♯"
-        x = 1
+    if length(pe) >= 2
+        if pe[2] == "#" || pe[2] == "♯"
+            x = 1
+            deleteat!(pe,2)
+        elseif pe[2] == "b" || pe[2] == "♭"
+            x = -1
+            deleteat!(pe,2)
+        end
     end
-    if length(pe) > 1 + x
-        octave = Meta.parse(join(pe[2+x:end]))
-    else
-        octave = 4
+    if length(pe) == 1
+        push!(pe, string(4))
     end
-
+    
+    octave = parse(Int, join(pe[2:end]))
+    
     return pitch + x + 12(octave+1) # lowest possible octave is -1 but pitch starts from 0
 end
 

@@ -24,8 +24,6 @@ function type1totype0(data::MIDIFile)
 	type1totype0!(newdata)
 end
 
-export type1totype0, type1totype0!
-
 function type0totype1!(data::MIDIFile)
 	if data.format != UInt8(0)
 		error("Got type $(data.format); expecting type 0")
@@ -34,7 +32,7 @@ function type0totype1!(data::MIDIFile)
 	push!(data.tracks, MIDITrack(Array{TrackEvent, 1}()))
 	nofchannels = 0
 	for event in data.tracks[1].events
-		if typeof(event) != MIDIEvent
+		if !isa(event, MIDIEvent)
 			push!(data.tracks[2].events, event)
 		else
 			channelnum = channelnumber(event)
@@ -64,7 +62,6 @@ function type0totype1(data::MIDIFile)
 	type0totype1!(newdata)
 end
 
-export type0totype1, type0totype1!
 
 function insertsorted!(events1::Array{TrackEvent, 1}, 
 					   events2::Array{TrackEvent, 1})
@@ -108,15 +105,13 @@ function getprogramchangeevents(data::MIDIFile)
 		i = 0
 		for event in track.events
 			i += 1
-			if typeof(event) == MIDIEvent && 
-					(0xF0 & event.status) $ PROGRAMCHANGE == 0
+			if event isa ProgramChangeEvent
 				push!(pgevents, [t, i, event])
 			end
 		end
 	end
 	pgevents
 end
-export getprogramchangeevents
 
 function dochannelsconflict(pgevents)
 	channels = Dict()
@@ -133,4 +128,3 @@ function dochannelsconflict(pgevents)
 	end
 	false
 end
-

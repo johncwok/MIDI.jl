@@ -1,6 +1,3 @@
-export MIDIFile, readMIDIFile, writeMIDIFile
-export BPM, ms_per_tick
-
 """
     MIDIFile <: Any
 Type representing a file of MIDI data.
@@ -16,7 +13,7 @@ mutable struct MIDIFile
     tracks::Vector{MIDITrack}
 end
 # Pretty print
-function Base.show(io::IO, midi::MIDIFile) where {N}
+function Base.show(io::IO, midi::MIDIFile)
 	tnames = tracknames(midi)
 	s = "MIDIFile (format=$(Int(midi.format)), tpq=$(midi.tpq)) "
 	if any(!isequal(NOTRACKNAME), tnames) # we have tracknames
@@ -33,133 +30,148 @@ end
 
 MIDIFile() = MIDIFile(0,960,MIDITrack[])
 
-function readMIDIFileastype0(filename::AbstractString)
-	MIDIFile = readMIDIFile(filename)
-	if MIDIFile.format == 1
-		type1totype0!(MIDIFile)
-	end
-	MIDIFile
+"""
+    qpm(midi)
+Return the QPM (quarter notes per minute) where the given `MIDIFile` was exported at.
+Returns 120 if not found.
+"""
+function qpm(t::MIDI.MIDIFile)
+    # Find the one that corresponds to Set Tempo:
+    # The event tttttt corresponds to the command
+    # FF 51 03 tttttt Set Tempo (in microseconds per MIDI quarter-note)
+    # See here (page 8):
+    # http://www.cs.cmu.edu/~music/cmsip/readings/Standard-MIDI-file-format-updated.pdf
+    for event in t.tracks[1].events
+        if event isa SetTempoEvent
+            return 6e7 / event.tempo
+        end
+    end
+
+    # Default QPM if it is not present in the MIDI file.
+    @warn """The Set Tempo event is not present in the given MIDI file.
+    A default value of 120.0 quarter notes per minute is returned."""
+    return 120.0
 end
 
 """
-    readMIDIFile(filename::AbstractString)
-Read a file into a `MIDIFile` data type.
+    bpm(midi)
+Return the BPM where the given `MIDIFile` was exported at.
+Returns QPM if not found.
 """
-function readMIDIFile(filename::AbstractString)
-    if length(filename) < 4 || filename[end-3:end] != ".mid"
-		filename *= ".mid"
+function bpm(t::MIDI.MIDIFile)
+    cc = -1
+
+    # Find the one that corresponds to Time Signature:
+    # FF 58 04 nn dd cc bb Time Signature
+    # See here (page 8):
+    # http://www.cs.cmu.edu/~music/cmsip/readings/Standard-MIDI-file-format-updated.pdf
+    for event in t.tracks[1].events
+        if event isa TimeSignatureEvent
+            cc = event.clockticks
+            break
+        end
     end
-    f = open(filename)
 
-    midifile = MIDIFile()
-    # Check that it's a valid MIDI file - first four bytes should spell MThd
-    mthd = join(map(Char, read!(f, Array{UInt8}(undef, 4))))
-    if mthd != MTHD
-        error("Not a valid MIDI file. Expected first 4 bytes to spell 'MThd', got $(mthd)")
+    if cc == -1
+        @warn """The Time Signature event is not present in the given MIDI file.
+        A default value of 24 cc (clocks per metronome click) is used for calculating the BPM."""
+        # Default cc if not found
+        cc = 24
     end
 
-    # Skip the next four bytes - this is the header size, and it's always equal to 6.
-    skip(f, 4)
-
-    # Read the format code. 0 = single track, 1 = multiple tracks, 2 = multiple songs
-    # Remember - MIDI files store data in big-endian format, which is why ntoh is used
-    midifile.format = ntoh(read(f, UInt16))
-
-    # Get the number of tracks and time division
-    numberoftracks = ntoh(read(f, UInt16))
-    midifile.tpq = ntoh(read(f, Int16))
-    midifile.tracks = [readtrack(f) for x in 1:numberoftracks]
-    close(f)
-
-    midifile
+    bpm = qpm(t) * 24 / cc
 end
 
-readMIDIFile() = readMIDIFile(testmidi())
-
-"""
-    writeMIDIFile(filename::AbstractString, data::MIDIFile)
-Write a `MIDIFile` as a ".mid" file to the given filename.
-
-    writeMIDIFile(filename::AbstractString, notes::Notes)
-Create a `MIDIFile` directly from `notes`, using format 1.
-"""
-function writeMIDIFile(filename::AbstractString, data::MIDIFile)
-    if length(filename) < 4 || lowercase(filename[end-3:end]) != ".mid"
-      filename *= ".mid"
-    end
-
-    f = open(filename, "w")
-
-    write(f, MTHD) # File identifier
-    write(f, hton(convert(UInt32, 6))) # Header length
-    write(f, hton(data.format))
-    write(f, hton(convert(UInt16, length(data.tracks))))
-    write(f, hton(data.tpq))
-
-    map(track->writetrack(f, track), data.tracks)
-
-    close(f)
-    return data
-end
-
-function writeMIDIFile(filename::AbstractString, notes::Notes)
-    if length(filename) < 4 || lowercase(filename[end-3:end]) != ".mid"
-      filename *= ".mid"
-    end
-
-    track = MIDITrack()
-    addnotes!(track, notes)
-    midi = MIDIFile(1, notes.tpq, [track])
-    writeMIDIFile(filename, midi)
-    return midi
-end
-
-
+# Deprecated
 """
     BPM(midi)
 Return the BPM where the given `MIDIFile` was exported at.
+Returns 120 if not found.
 """
 function BPM(t::MIDI.MIDIFile)
-    # META-event list:
-    tttttt = Vector{UInt32}()
+    @warn """This function is deprecated.
+    It returns quarter notes per minute instead of beats per minute.
+    Please use `bpm` for beats per minute and `qpm` for quarter notes per minute."""
+
     # Find the one that corresponds to Set-Time:
     # The event tttttt corresponds to the command
     # FF 51 03 tttttt Set Tempo (in microseconds per MIDI quarter-note)
     # See here (page 8):
     # http://www.cs.cmu.edu/~music/cmsip/readings/Standard-MIDI-file-format-updated.pdf
     for event in t.tracks[1].events
-        if typeof(event) == MetaEvent
-            if event.metatype == 0x51
-                tttttt = deepcopy(event.data)
-                break
+        if event isa SetTempoEvent
+            return 6e7 / event.tempo
+        end
+    end
+
+    # Default BPM if it is not present in the MIDI file.
+    @warn """The Set Tempo event is not present in the given MIDI file.
+    A default value of 120.0 quarter notes per minute is returned."""
+    return 120.0
+end
+
+"""
+    time_signature(midi)
+Return the time signature of the given `MIDIFile`.
+Returns 4/4 if it doesn't find a time signature.
+"""
+function time_signature(t::MIDI.MIDIFile)
+    # Find the one that corresponds to Time Signature:
+    # FF 58 04 nn dd cc bb Time Signature
+    # See here (page 8):
+    # http://www.cs.cmu.edu/~music/cmsip/readings/Standard-MIDI-file-format-updated.pdf
+    for event in t.tracks[1].events
+        if event isa TimeSignatureEvent
+            ts = string(event.numerator) * "/" * string(event.denominator)
+            return ts
+        end
+    end
+
+    @warn """The Time Signature event is not present in the given MIDI file.
+    A default value of 4/4 is returned."""
+
+    # Default time signature if it is not present in the file
+    return "4/4"
+end
+
+"""
+    tempochanges(midi)
+Return a vector of (position, tempo) tuples for all the tempo events in the given `MIDIFile`
+where position is in absolute time (from the beginning of the file) in ticks
+and tempo is in quarter notes per minute.
+Returns [(0, 120.0)] if there are no tempo events.
+"""
+function tempochanges(midi::MIDIFile)
+    # Stores (position, tempo) pairs
+    # Calls qpm() to store the first tempo value
+    # If there is no tempo event, qpm will warn and return 120.0
+    tempo_changes = [(0, qpm(midi))]
+    position = 0
+    for event in midi.tracks[1].events
+        position += event.dT
+        if event isa SetTempoEvent
+            qpm = 6e7 / event.tempo
+
+            # Allow only one tempo change at the beginning
+            if position == 0
+                tempo_changes = [(0, qpm)]
+            else
+                push!(tempo_changes, (position, qpm))
             end
         end
     end
-    # Ensure that tttttt is with correct form (first entry should be 0x00)
-    if tttttt[1] != 0x00
-        pushfirst!(tttttt, 0x00)
-    else
-        # Handle correctly "incorrect" cases where 0x00 has entered more than once
-        tttttt = tttttt[findin(tttttt, 0x00)[end]:end]
-    end
 
-    # Get the microsecond number from tttttt
-    u = ntoh(reinterpret(UInt32, tttttt)[1])
-    μs = Int64(u)
-    # BPM:
-    bpm = 60000000/μs
+    tempo_changes
 end
 
-
-
 """
-    ms_per_tick(tpq, bpm)
+    ms_per_tick(tpq, qpm)
     ms_per_tick(midi::MIDIFile)
 Return how many miliseconds is one tick, based
-on the beats per minute `bpm` and ticks per quarter note `tpq`.
+on the quarter notes per minute `qpm` and ticks per quarter note `tpq`.
 """
-ms_per_tick(midi::MIDI.MIDIFile, bpm = BPM(midi)) = ms_per_tick(midi.tpq, bpm)
-ms_per_tick(tpq, bpm) = (1000*60)/(bpm*tpq)
+ms_per_tick(midi::MIDI.MIDIFile, qpm = qpm(midi)) = ms_per_tick(midi.tpq, qpm)
+ms_per_tick(tpq, qpm) = (1000*60)/(qpm*tpq)
 
-getnotes(midi::MIDIFile, trackno = midi.format == 0 ? 1 : 2) = 
+getnotes(midi::MIDIFile, trackno = midi.format == 0 ? 1 : 2) =
 getnotes(midi.tracks[trackno], midi.tpq)
